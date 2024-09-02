@@ -13,7 +13,7 @@ func StartCli() {
 
 	flex := tview.NewFlex().AddItem(table, 0, 1, true)
 
-	if err := app.SetRoot(flex, true).SetFocus(flex).Run(); err != nil {
+	if err := app.SetRoot(flex, true).SetFocus(table).Run(); err != nil {
 		panic(err)
 	}
 }

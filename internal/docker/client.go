@@ -154,3 +154,12 @@ func FilterContainersByStatus(filterVal string) ([]types.Container, error) {
 
 	return containers, nil
 }
+
+// restart container
+func RestartContainer(containerID string) error {
+	cli := GetDockerClient()
+	restartOptions := container.StopOptions{
+		Timeout: nil, // You can set this to nil for default behavior, or a specific timeout value
+	}
+	return cli.ContainerRestart(context.Background(), containerID, restartOptions)
+}
