@@ -11,11 +11,13 @@ import (
 
 // CreateTable displays Docker containers in a table and shows an action menu when a container is selected
 func CreateTable(app *tview.Application) *tview.Table {
-	// Create a new table with borders enabled
+	// Create a new table dashed thin border
 	table := tview.NewTable().
-		SetBorders(true)
+		SetBorders(true).
+		SetBordersColor(tcell.ColorDefault).
+		SetSeparator(tview.Borders.Vertical)
 
-	// Set table headers
+	// Set table headers with double width columns
 	table.SetCell(0, 0, tview.NewTableCell("ID").
 		SetTextColor(tcell.ColorYellow).
 		SetAlign(tview.AlignCenter).
