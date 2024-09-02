@@ -2,12 +2,11 @@ This is a Golang application designed for Docker container management.
 
 ## Features
 
-- **List Containers:** Quickly view all Docker containers running on your system.
+- **List Containers:** Quickly view all Docker containers on your system.
 - **Start/Stop/Pause/Unpause/Delete Containers:** Take control of your containers with simple commands to manage their lifecycle.
 - **Execute Commands:** Seamlessly execute commands within containers, enhancing your control and interaction.
 - **Display Logs:**  Quickly view container logs
-- **View Container Network and IP:** Quickly see network details for your container
-- **Filter containers:** Filter containers by name,IP or network
+- **Filter containers:** Filter containers by name or status
 
 ## Requirements
 - docker
