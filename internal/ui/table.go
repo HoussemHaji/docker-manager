@@ -3,6 +3,7 @@ package ui
 import (
 	"docker-cli-tool/internal/docker"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -11,27 +12,18 @@ import (
 
 // CreateTable displays Docker containers in a table and shows an action menu when a container is selected
 func CreateTable(app *tview.Application) *tview.Table {
-	// Create a new table dashed thin border
 	table := tview.NewTable().
-		SetBorders(true).
-		SetBordersColor(tcell.ColorDefault).
-		SetSeparator(tview.Borders.Vertical)
+		SetBorders(false)
 
-	// Set table headers with double width columns
-	table.SetCell(0, 0, tview.NewTableCell("ID").
-		SetTextColor(tcell.ColorYellow).
-		SetAlign(tview.AlignCenter).
-		SetBackgroundColor(tcell.ColorDefault))
-
-	table.SetCell(0, 1, tview.NewTableCell("Name").
-		SetTextColor(tcell.ColorYellow).
-		SetAlign(tview.AlignCenter).
-		SetBackgroundColor(tcell.ColorDefault))
-
-	table.SetCell(0, 2, tview.NewTableCell("Status").
-		SetTextColor(tcell.ColorYellow).
-		SetAlign(tview.AlignCenter).
-		SetBackgroundColor(tcell.ColorDefault))
+	// Set table headers
+	headers := []string{"ID", "STATUS", "CONTAINER NAME"}
+	for col, header := range headers {
+		table.SetCell(0, col,
+			tview.NewTableCell(header).
+				SetTextColor(tcell.ColorYellow).
+				SetAlign(tview.AlignLeft).
+				SetExpansion(1))
+	}
 
 	// Retrieve Docker container information
 	containers, err := docker.ListContainers(true)
@@ -42,49 +34,57 @@ func CreateTable(app *tview.Application) *tview.Table {
 	// Populate the table with container data
 	for i, container := range containers {
 		// Format container ID and name
-		containerID := container.ID[:10]
+		containerID := container.ID[:12] // Show first 12 characters of ID
 		containerName := container.Names[0][1:]
 
 		// Set the status color based on container state
-		statusText := container.State
+		statusText := strings.ToUpper(container.State)
 		statusColor := tcell.ColorGreen
 		if container.State != "running" {
-			statusText = "STOPPED"
 			statusColor = tcell.ColorRed
 		}
 
 		// Add rows to the table
-		table.SetCell(i+1, 0, tview.NewTableCell(containerID).
+		table.SetCell(i*2+1, 0, tview.NewTableCell(containerID).
 			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignCenter).
-			SetBackgroundColor(tcell.ColorDefault))
+			SetExpansion(1))
 
-		table.SetCell(i+1, 1, tview.NewTableCell(containerName).
-			SetTextColor(tcell.ColorBlue).
-			SetAlign(tview.AlignCenter).
-			SetBackgroundColor(tcell.ColorDefault))
-
-		table.SetCell(i+1, 2, tview.NewTableCell(statusText).
+		table.SetCell(i*2+1, 1, tview.NewTableCell(statusText).
 			SetTextColor(statusColor).
-			SetAlign(tview.AlignCenter).
-			SetBackgroundColor(tcell.ColorDefault))
+			SetExpansion(1))
+
+		table.SetCell(i*2+1, 2, tview.NewTableCell(containerName).
+			SetTextColor(tcell.ColorWhite).
+			SetExpansion(1))
+
+		// Add separator row
+		if i < len(containers)-1 {
+			separatorRow := i*2 + 2
+			for col := 0; col < 3; col++ {
+				table.SetCell(separatorRow, col,
+					tview.NewTableCell("-----------------------").
+						SetTextColor(tcell.ColorGray).
+						SetExpansion(1))
+			}
+		}
 	}
 
-	// Enable row selection but not column selection
+	// Enable row selection
 	table.SetSelectable(true, false)
 
-	// focus bg color for selected row to gray
-	table.SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorGray))
+	// Set selected style
+	table.SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorDarkBlue))
 
 	// Set a function to trigger on row selection
 	table.SetSelectedFunc(func(row, column int) {
-		if row == 0 {
-			return // Skip header row
+		if row%2 == 0 || row == 0 {
+			return // Skip header and separator rows
 		}
 
 		// Get selected container details
-		containerID := containers[row-1].ID
-		containerName := containers[row-1].Names[0][1:]
+		containerIndex := row / 2
+		containerID := containers[containerIndex].ID
+		containerName := containers[containerIndex].Names[0][1:]
 
 		// Show the container action menu
 		showActionMenu(app, containerID, containerName)
@@ -97,8 +97,12 @@ func CreateTable(app *tview.Application) *tview.Table {
 func showActionMenu(app *tview.Application, containerID, containerName string) {
 	// Create a text view to display the menu
 	menu := tview.NewTextView().
-		SetDynamicColors(true).
-		SetText(fmt.Sprintf(`You have selected: [yellow]%s [green]%s[white]
+		SetDynamicColors(true)
+
+	userInput := ""
+
+	updateMenuText := func() {
+		menuText := fmt.Sprintf(`You have selected: [yellow]%s [green]%s[white]
 
 Options:
   [ s ] Start
@@ -112,40 +116,65 @@ Options:
   ---------------
   [ b ] Go back
 
-Please select your action:`, containerName, containerID))
+Please select your action: %s`, containerName, containerID, userInput)
+
+		menu.SetText(menuText)
+	}
+
+	updateMenuText()
 
 	// Handle user input for the menu
-	// the menu should respond by typing the corresponding letter and showing it on the terminal and then pressing enter
 	menu.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 's': // Start container
-			go performContainerAction(app, menu, "Starting container..", func() error {
-				return docker.StartContainer(containerID)
-			})
-		case 'x': // Stop container
-			go performContainerAction(app, menu, "Stopping container..", func() error {
-				return docker.StopContainer(containerID)
-			})
-		case 'r': // Restart container
-			go performContainerAction(app, menu, "Restarting container..", func() error {
-				return docker.RestartContainer(containerID)
-			})
-		case 'p': // Pause container
-			go performContainerAction(app, menu, "Pausing container..", func() error {
-				return docker.PauseContainer(containerID)
-			})
-		case 'u': // Unpause container
-			go performContainerAction(app, menu, "Unpausing container..", func() error {
-				return docker.UnpauseContainer(containerID)
-			})
-		case 'l': // Show container logs
-			go performContainerAction(app, menu, "Fetching container logs..", func() error {
-				return docker.GetContainerLogs(containerID)
-			})
-		case 'b': // Go back to the table
-			app.SetRoot(CreateTable(app), true)
+		switch event.Key() {
+		case tcell.KeyRune:
+			userInput += string(event.Rune())
+		case tcell.KeyBackspace, tcell.KeyBackspace2:
+			if len(userInput) > 0 {
+				userInput = userInput[:len(userInput)-1]
+			}
+		case tcell.KeyEnter:
+			if len(userInput) > 0 {
+				action := strings.ToLower(userInput[:1])
+				userInput = ""
+				switch action {
+				case "s": // Start container
+					go performContainerAction(app, menu, "Starting container..", func() error {
+						return docker.StartContainer(containerID)
+					})
+				case "x": // Stop container
+					go performContainerAction(app, menu, "Stopping container..", func() error {
+						return docker.StopContainer(containerID)
+					})
+				case "r": // Restart container
+					go performContainerAction(app, menu, "Restarting container..", func() error {
+						return docker.RestartContainer(containerID)
+					})
+				case "p": // Pause container
+					go performContainerAction(app, menu, "Pausing container..", func() error {
+						return docker.PauseContainer(containerID)
+					})
+				case "u": // Unpause container
+					go performContainerAction(app, menu, "Unpausing container..", func() error {
+						return docker.UnpauseContainer(containerID)
+					})
+				case "l": // Show container logs
+					go performContainerAction(app, menu, "Fetching container logs..", func() error {
+						return docker.GetContainerLogs(containerID)
+					})
+				case "d": // Delete container
+					go performContainerAction(app, menu, "Deleting container..", func() error {
+						return docker.DeleteContainer(containerID)
+					})
+				case "b": // Go back to the table
+					app.SetRoot(CreateTable(app), true)
+				default:
+					userInput = action
+				}
+			}
 		}
-		return nil // No need for 'Enter' to confirm
+
+		updateMenuText()
+		return nil
 	})
 
 	// Show the menu
